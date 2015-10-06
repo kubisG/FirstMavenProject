@@ -26,7 +26,7 @@ public class App
         Point p = driver.findElement(By.id("lst-ib")).getLocation();
         
         robot.mouseMove(p.getX(), p.getY());
-        robot.delay(100000);
+        robot.delay(1000);
         
         driver.close();
     }
