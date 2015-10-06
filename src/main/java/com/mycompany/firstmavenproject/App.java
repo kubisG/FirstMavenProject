@@ -28,6 +28,8 @@ public class App
         robot.mouseMove(p.getX(), p.getY());
         robot.delay(1000);
         
+        // Muj komentar
+        // Neco neco 
         driver.close();
     }
 }
