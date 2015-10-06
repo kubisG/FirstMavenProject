@@ -30,6 +30,7 @@ public class App
         
         // Muj komentar
         // Neco neco 
+        //Přídaám další komentář který povede ke konfliktu
         driver.close();
     }
 }
