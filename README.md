@@ -1,4 +1,4 @@
 # FirstMavenProject
 This is my first maven project
 
-sem zvedavy jestli bude conflict
+sem zvedavy jestli bude conflict prdel sracka
