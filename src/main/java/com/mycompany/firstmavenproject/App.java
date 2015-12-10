@@ -81,7 +81,7 @@ public class App
         List<String> names = sl.getMethodNames("@Test");
         List<Variable> variables = sl.resolveTestBindings(names.get(0));
         
-        
+        sl.prepareCommands(names.get(0), variables);
         sl.initializeDriver(names.get(0), variables);
            
    }

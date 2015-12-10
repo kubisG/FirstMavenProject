@@ -7,65 +7,68 @@ package com.mycompany.firstmavenproject;
 
 import java.util.LinkedList;
 import java.util.Queue;
-import org.eclipse.jetty.util.ArrayQueue;
-
 /**
  *
  * @author Jakub
  */
 public class Variable {
-    private String type;
-    private String name;
-    private Queue<String> values = new LinkedList<>();
+    private String varType;
+    private String varName;
+    private Queue<Value> varValues = new LinkedList<>();
         
-    public Variable(String type, String name, String value) {
-        this.type = type;
-        this.name = name;
-        this.values.add(value);
+    public Variable(String type, String name, Value varValue) {
+        this.varType = type;
+        this.varName = name;
+        this.varValues.add(varValue);
     }
 
     public Variable(String type, String name) {
-        this.type = type;
-        this.name = name;        
+        this.varType = type;
+        this.varName = name;        
     }
 
     public Variable(Variable variable) {
-        this.type = variable.getType();
-        this.name = variable.getName();
-        this.values = new LinkedList<>(variable.getValues());
+        this.varType = variable.getVarType();
+        this.varName = variable.getVarName();
+        this.varValues = new LinkedList<>(variable.getValues());
     }
     
-    public String getType() {
-        return type;
+    public String getVarType() {
+        return varType;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    public void setVarType(String varType) {
+        this.varType = varType;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setVarName(String varName) {
+        this.varName = varName;
     }
 
-    public String getName() {
-        return name;
+    public String getVarName() {
+        return varName;
     }
 
-    public void setValue(String value) {
+    public void setValue(Value value) {
         if(!containsValue(value))
-            this.values.add(value);
+            this.varValues.add(value);
     }
 
-    public String getValue() {
-        return this.values.poll();
+    public Value getValue() {
+        return this.varValues.poll();
     }
     
-    public Queue<String> getValues() {
-        return this.values;
+    public Queue<Value> getValues() {
+        return this.varValues;
     }
-    private boolean containsValue(String value) {
-        return this.values
+    
+    // Vraci true pokud varValues již obsahují hodnotu varValue a navíc tato
+    // hodnota byla přiřazena na stejném řádku (tzn. duplicitní hodnota)
+    private boolean containsValue(Value varValue) {
+        return this.varValues
                 .stream()
-                .anyMatch(e -> e.equals(value));
+                .anyMatch(v -> v.getValue().equals(varValue.getValue())
+                            && v.getBeginLine() == varValue.getBeginLine());
     }
+    
 }

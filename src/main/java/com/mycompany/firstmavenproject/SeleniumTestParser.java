@@ -22,15 +22,19 @@ import japa.parser.ast.expr.BinaryExpr;
 import japa.parser.ast.expr.Expression;
 import japa.parser.ast.expr.MethodCallExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
+import japa.parser.ast.stmt.Statement;
 import japa.parser.ast.visitor.VoidVisitorAdapter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.time.Clock;
+import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -188,59 +192,89 @@ public class SeleniumTestParser {
     }
     
     // Návázaní hodnot proměnných metody
-    public void resolveBindings(List<Variable> variables, MethodDeclaration method) {
-        List<String> statements = methodToStrings(method);
-        List<Deque<MethodCallExpr>> commands = new ArrayList<>();
-        List<String> values;
+    public void resolveBindings(List<Variable> vars, MethodDeclaration method) {
+        List<Value> varValues;
         
-        for (Variable var: variables) {
-            values = findVariableValues(statements, var.getName());
-            if(values != null) {
-                for (String value : values) {
-                    var.setValue(value);    
+        for (Variable var: vars) {
+            varValues = findVariableValues(method, var.getVarName());
+            if(varValues != null) {
+                for (Value varValue : varValues) {
+                    var.setValue(varValue);    
                 }
             }
-            System.out.println(" ");
         }
-        MethodCall mc = new MethodCall();
-        mc.visit(method, commands);
-        //filterCommands(variables, commands);
     }
     
     // Metoda 
     public List<Variable> resolveTestBindings(String testName) {
         MethodDeclaration testMethod = findMethodByName(testName);
-        List<Variable> variables = findMethodVariables(testMethod);
+        List<Variable> vars = findMethodVariables(testMethod);
         // K lokálním proměnným přidám ještě fieldy (instanční proměnné, které 
         // se mohou v metodé vyskytovat) 
-        variables.addAll(fields);
-        resolveBindings(variables, testMethod);
+        vars.addAll(fields);
+        resolveBindings(vars, testMethod);
         
         //  CHYBÍ DODĚLAT VYHODNOCĚNÍ VÝRAZŮ "HODNOT" POKUD JE TŘEBA
         //
-        
-    return variables;
+    return vars;
     }
     
     // Metoda která zjistí hodnoty proměnných v rámci Testu(testovací metody)
     // Zamyslet se nad vyjimkou, kterou by mohl vyhodit matcher
-    private List<String> findVariableValues(List<String> statements, String varName) {
+    private List<Value> findVariableValues(MethodDeclaration method, String varName) {
         Pattern p1 = Pattern.compile(varName + "\\s+\\=\\s.+\\;");
         Pattern p2 = Pattern.compile("[^\\s\\;]+\\s*[^\\s\\;]*");
-                
-        List<String> values = statements
+        List<Statement> statements = method.getBody().getStmts();
+        List<Value> varValues;
+        
+        List<Statement> matchedStatements = statements
                 .stream()
-                .filter(e -> p1.matcher(e).find())
-                .flatMap(line -> Stream.of(line.split("=")))
+                .filter(e -> p1.matcher(e.toString()).find())
+                .collect(Collectors.toList());
+        
+        if(matchedStatements.isEmpty())
+            return null;
+        
+        List<String> values = matchedStatements
+                .stream()
+                .flatMap(line -> Stream.of(line.toString().split("=")))
                 .filter(e -> !e.contains(varName))
                 .map(e -> { Matcher m = p2.matcher(e);
                             m.find();
                             return m.group();})
                 .collect(Collectors.toList());
         
-    return values;
+        List<Integer> valuesBeginLine = matchedStatements
+                .stream()
+                .map(e -> e.getBeginLine())
+                .collect(Collectors.toList());
+     
+        varValues = mergeVariableValues(values, valuesBeginLine);
+        
+    return varValues;
     }
-
+    
+    private List<Value> mergeVariableValues(List<String> values, List<Integer> valuesBeginLine) {
+        List<Value> varValues = new ArrayList<>();
+        Iterator<String> it1 = values.iterator();
+        Iterator<Integer> it2 = valuesBeginLine.iterator();
+        int beginLine = it2.next();
+        int endLine;
+        String value;
+        
+        while (it1.hasNext()) {
+            value = it1.next();
+            if(it2.hasNext()){
+                endLine = it2.next();
+                varValues.add(new Value(value, beginLine, endLine));
+                beginLine = endLine;          
+            }
+            else
+                varValues.add(new Value(value, beginLine));
+        }
+    return varValues;
+    }
+    
     // Metoda vrací setUpMetodu s annotaci @Before nebo @BeforeClass
     // Je logické, aby byla použita jen jedna setUpMetoda (nebo žádná)
     private MethodDeclaration findSetUpMethod() {
@@ -292,7 +326,7 @@ public class SeleniumTestParser {
         public void visit(MethodCallExpr n, Object arg) {
             counter++;
             super.visit(n, arg);
-            System.out.println(n.toString());
+            System.out.println(n.getBeginLine() + " " + n.getName());
             command.push(n);
             counter--;
             if(counter == 0){
@@ -303,61 +337,174 @@ public class SeleniumTestParser {
         }      
     }      
     
-    
-    
     private void setVariables(List<VariableDeclarator> vars, Object testVariables, String type) {
         List<Variable> tmp = (List<Variable>)testVariables; 
             
         for (VariableDeclarator var: vars){
                 if(var.getInit() != null)
                     tmp.add(new Variable(type, var.getId().toString(), 
-                                                    var.getInit().toString()));
+                                                    new Value(var.getInit().toString(),
+                                                              var.getBeginLine())));
                 else
                     tmp.add(new Variable(type, var.getId().toString()));
         }
     }
      
-    public Variable initializeDriver(String testName ,List<Variable> variables) {
+    public Variable initializeDriver(String testName ,List<Variable> vars) {
         Variable driver;
         MethodDeclaration testMethod = findMethodByName(testName);
         List<String> statements = methodToStrings(testMethod);
        
-        driver = variables
+        driver = vars
                 .stream()
                 .filter(e -> Arrays.stream(driverNames)
-                        .anyMatch(n -> e.getType().equals(n)))
+                        .anyMatch(n -> e.getVarType().equals(n)))
                 .filter(d -> statements
                         .stream()
-                        .anyMatch(s -> s.contains(d.getName() + "."))) // Př: driver.
+                        .anyMatch(s -> s.contains(d.getVarName() + "."))) // Př: driver.
                 .reduce(null, (a, v) -> new Variable(v));
     
     return driver;
     }
-     
-    // Vymyslet nazev pro seznam call expr
-    public List<MethodCallExpr> filterIncompleteCommands(List<Variable> variables, List<Deque<MethodCallExpr>> exprs) {
-        List<MethodCallExpr> result = exprs
+    
+    // Potom upravím aby parametrem byla nejaka podmínka a ne jen string  
+    private List<Variable> filterVariables(List<Variable> vars, String driverName){
+        List<Variable> filtredVars = vars
                 .stream()
-                .map(e -> e.getFirst())
-                .filter(m -> variables
+                .filter(e -> e.getValues()
                         .stream()
-                        .filter(v -> !v.getType().contains("Driver"))
-                        .anyMatch(v -> m.toString().contains(v.getName() + ".") || v.getValues()
-                                    .stream()
-                                    .anyMatch(val ->  val.equals(m.toString()))))
+                        .anyMatch(v -> v.getValue().contains(driverName)))
                 .collect(Collectors.toList());
     
-    return result;    
+    return filtredVars;
     }
     
-    
-    public List<ArrayDeque<MethodCallExpr>> filterSeleniumCommands(List<Variable> variables, 
-            List<Deque<MethodCallExpr>> exprs) {
+   // Vrací seznam commands týkající se pouze příkazů Selenia
+    // tzn. příkazy volané nad WebDriverem, WebElement atd.
+    private List<Deque<MethodCallExpr>> filterMethodCallExprs(List<Variable> vars, 
+            MethodDeclaration method, String driverName) {       
+        List<Deque<MethodCallExpr>> methodCallExprs;
+        List<Deque<MethodCallExpr>> seleniumMethodCallExprs;
         
-        List<MethodCallExpr> incompleteCommands = filterIncompleteCommands(variables, exprs);
+        methodCallExprs = new ArrayList<>();
+        new MethodCall().visit(method, methodCallExprs);
         
-        return null;
+        seleniumMethodCallExprs = methodCallExprs
+                .stream()
+                .filter(m -> vars
+                        .stream()
+                        .anyMatch(var -> m.getFirst().toString().contains(var.getVarName() + ".")
+                                        || m.getFirst().toString().contains(driverName)))                
+                .collect(Collectors.toList());
+        
+    return seleniumMethodCallExprs; 
     }
+    
+    private List<Deque<MethodCallExpr>> filterSeleniumMethodCallExprs(List<Variable> vars,
+            List<Deque<MethodCallExpr>> seleniumMethodCallExprs, 
+            MethodCallCondition c) {     
+        List<Deque<MethodCallExpr>> driverMethodCalls;
+        
+        driverMethodCalls = seleniumMethodCallExprs
+                .stream()
+                .filter(m -> vars
+                        .stream()
+                        .flatMap(var -> var.getValues().stream())
+                        .anyMatch(val -> c.passedCondition(m.getFirst().toString(),
+                                val.getValue())))
+                .collect(Collectors.toList());            
+    
+    return driverMethodCalls;
+    }
+    
+    // POZN: PŘEDĚLAT ... natvrdo nastavena hodnota
+    // pokud má var jen jednu hotnotu tak endline je nastaveny na 0
+    // pri vytvaření poslední value (nebo jedine) zjistit endline cele metody
+    private String findVarValue(Variable var, int lineNumber) {
+        String value = var.getValues()
+                .stream()
+                .filter(val -> (val.getBeginLine() < lineNumber) 
+                            && (100 > lineNumber))  // !!!!!!!
+                .map(val -> val.getValue())
+                .reduce("", String::concat);
+    
+    return value;
+    }
+      
+    // Možná použít reduce s copy konstruktorem arraydeque ???
+    private Deque<MethodCallExpr> getMethodCallExprsByVarValue(String varValue,
+            List<Deque<MethodCallExpr>> tmpMethodCallExprs) {
+        Deque<MethodCallExpr> methodCallExprs;
+        
+        methodCallExprs = tmpMethodCallExprs
+                .stream()
+                .filter(e -> e.getFirst().toString().equals(varValue))
+                .flatMap(e -> e.stream())
+                .collect(ArrayDeque::new, ArrayDeque::add, ArrayDeque::addAll);
+    
+    return methodCallExprs;
+    }
+    
+    private void nevim(List<Variable> seleniumVars,
+            List<Deque<MethodCallExpr>> driverMethodCallExprs, 
+            List<Deque<MethodCallExpr>> tmpMethodCallExprs) {
+        Deque<MethodCallExpr> tmpDequeMCExpr;
+        MethodCallExpr tmpMCExpr;
+        Variable tmpVar;
+        String tmpStr;
+        String varValue;
+        
+        for (Deque<MethodCallExpr> dmce : driverMethodCallExprs) {
+            tmpMCExpr = dmce.getFirst();
+            tmpStr = tmpMCExpr.toString();
+            
+            for (Variable var : seleniumVars) {
+                if(tmpStr.contains(var.getVarName())) {
+                    int lineNumber = tmpMCExpr.getBeginLine();
+                    varValue = findVarValue(var, lineNumber);
+                    tmpDequeMCExpr = getMethodCallExprsByVarValue(varValue, 
+                                tmpMethodCallExprs);
+                    dmce.addAll(tmpDequeMCExpr);
+                } 
+            }
+        }
+    }
+    // Vrací seznam methodcalls (selenium prikazu), které slouží jako vstup pro 
+    // vytvoření mých Commands
+    public List<Deque<MethodCallExpr>> prepareCommands(String testName,
+           List<Variable> vars){
+        List<Deque<MethodCallExpr>> driverMethodCallExprs;
+        List<Deque<MethodCallExpr>> seleniumMethodCallExprs;
+        List<Deque<MethodCallExpr>> tmpMethodCallExprs;
+        List<Variable> seleniumVars;
+        MethodDeclaration method;
+        String driverName = "driver";
+
+        method = findMethodByName(testName);
+        seleniumVars = filterVariables(vars, driverName);
+        seleniumMethodCallExprs = filterMethodCallExprs(seleniumVars, method, driverName);
+        driverMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
+                               seleniumMethodCallExprs, (m, val) -> !m.equals(val));
+        tmpMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
+                            seleniumMethodCallExprs, (m, val) -> m.equals(val));
+        
+        nevim(seleniumVars, driverMethodCallExprs, tmpMethodCallExprs);
+        
+        for (Deque<MethodCallExpr> item : driverMethodCallExprs) {
+            System.out.println(item.getFirst());
+        }
+        
+        return driverMethodCallExprs;
+    }
+
+    
+//    public List<Deque<MethodCallExpr>> filterSeleniumCommands(List<Variable> vars, 
+//            List<Deque<MethodCallExpr>> exprs) {
+//        
+//        List<MethodCallExpr> incompleteCommands = filterIncompleteCommands(vars, exprs);
+//        
+//    return null;
+//    }
     
     
     
@@ -373,8 +520,8 @@ public class SeleniumTestParser {
         boolean passedCondition(Object o);
     }
     
-    public static interface FieldCondition {
-        boolean passedCondition(Variable v);
+    public static interface MethodCallCondition {
+        boolean passedCondition(String mce, String val);
     }
     
     public static interface MethodCondition {
