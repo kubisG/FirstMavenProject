@@ -188,6 +188,7 @@ public class SeleniumTestParser {
                 .stream()
                 .map(e -> e.toString())
                 .collect(Collectors.toList());
+    
     return statements;
     }
     
@@ -206,7 +207,7 @@ public class SeleniumTestParser {
     }
     
     // Metoda 
-    public List<Variable> resolveTestBindings(String testName) {
+    public List<Variable> initializeVariables(String testName) {
         MethodDeclaration testMethod = findMethodByName(testName);
         List<Variable> vars = findMethodVariables(testMethod);
         // K lokálním proměnným přidám ještě fieldy (instanční proměnné, které 
@@ -326,7 +327,7 @@ public class SeleniumTestParser {
         public void visit(MethodCallExpr n, Object arg) {
             counter++;
             super.visit(n, arg);
-            System.out.println(n.getBeginLine() + " " + n.getName());
+            //System.out.println(n.getBeginLine() + " " + n.getName());
             command.push(n);
             counter--;
             if(counter == 0){
@@ -445,9 +446,10 @@ public class SeleniumTestParser {
     return methodCallExprs;
     }
     
-    private void nevim(List<Variable> seleniumVars,
+    private void assignmentToFluent(
+            List<Variable> seleniumVars,
             List<Deque<MethodCallExpr>> driverMethodCallExprs, 
-            List<Deque<MethodCallExpr>> tmpMethodCallExprs) {
+            List<Deque<MethodCallExpr>> tmpMethodCallExprs) {       
         Deque<MethodCallExpr> tmpDequeMCExpr;
         MethodCallExpr tmpMCExpr;
         Variable tmpVar;
@@ -469,44 +471,130 @@ public class SeleniumTestParser {
             }
         }
     }
+    
     // Vrací seznam methodcalls (selenium prikazu), které slouží jako vstup pro 
     // vytvoření mých Commands
-    public List<Deque<MethodCallExpr>> prepareCommands(String testName,
-           List<Variable> vars){
+    public List<Deque<MethodCallExpr>> prepareDriverMethodCalls(
+            String testName,
+            List<Variable> vars){       
         List<Deque<MethodCallExpr>> driverMethodCallExprs;
         List<Deque<MethodCallExpr>> seleniumMethodCallExprs;
         List<Deque<MethodCallExpr>> tmpMethodCallExprs;
         List<Variable> seleniumVars;
         MethodDeclaration method;
-        String driverName = "driver";
+        String driverName = "driver"; // NEMIT TO NA PEVNO NASTAVENE !!!!
 
         method = findMethodByName(testName);
         seleniumVars = filterVariables(vars, driverName);
-        seleniumMethodCallExprs = filterMethodCallExprs(seleniumVars, method, driverName);
-        driverMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
-                               seleniumMethodCallExprs, (m, val) -> !m.equals(val));
-        tmpMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
-                            seleniumMethodCallExprs, (m, val) -> m.equals(val));
+        if (!seleniumVars.isEmpty()) {
+            seleniumMethodCallExprs = filterMethodCallExprs(seleniumVars, method, driverName);
+            driverMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
+                                   seleniumMethodCallExprs, (m, val) -> !m.equals(val));
+            tmpMethodCallExprs = filterSeleniumMethodCallExprs(seleniumVars, 
+                                seleniumMethodCallExprs, (m, val) -> m.equals(val));
         
-        nevim(seleniumVars, driverMethodCallExprs, tmpMethodCallExprs);
+            assignmentToFluent(seleniumVars, driverMethodCallExprs, tmpMethodCallExprs);
+        }
+        else
+            driverMethodCallExprs = filterMethodCallExprs(vars, method, driverName);
         
-        for (Deque<MethodCallExpr> item : driverMethodCallExprs) {
-            System.out.println(item.getFirst());
+    return driverMethodCallExprs;
+    }
+    
+    public String resolveParametrBinding(int beginLine, String param, 
+            List<Variable> vars){
+        Variable var = vars
+                .stream()
+                .filter(v -> v.getVarName().equals(param))
+                .reduce(null, (a, v) -> new Variable(v));
+        
+        if (var != null) 
+            return findVarValue(var, beginLine);
+        else 
+            return param;
+    }
+    
+    public boolean removeParam(String methodNameExpr, 
+            Deque<MethodCallExpr> driverMethodCallExprs) {       
+        Iterator<Expression> it;
+        List<Expression> paramExprs;
+        String param;
+        
+        for (MethodCallExpr driverMethodCallExpr : driverMethodCallExprs) {
+            paramExprs = driverMethodCallExpr.getArgs();
+            if (paramExprs != null) {
+                it = paramExprs.iterator();
+                while (it.hasNext()) {
+                    param = it.next().toString();
+                    if (param.equals(methodNameExpr)) {
+                        it.remove();
+                        return true;
+                   }
+                }
+            }
+        }
+    return false;
+    }
+    
+    // UPRAVIT ABYCH NEMEL V PARAMS VOLÁNÍ VNITRNICH METOD !!! ZÍTRA
+    public List<Deque<String>> prepareCommand(List<Variable> vars,
+            Deque<MethodCallExpr> driverMethodCallExprs){
+        
+        List<Deque<String>> preparedCommand = new ArrayList<>();
+        List<Expression> paramExprs;        
+        Deque<String> methodNames = new ArrayDeque<>();
+        Deque<String> params = new ArrayDeque<>();
+        MethodCallExpr tmp;
+        String currentMethodName;
+        String tmpParam;
+        int beginLine;
+       
+       while (!driverMethodCallExprs.isEmpty()){
+            tmp = driverMethodCallExprs.pollLast();
+            currentMethodName = tmp.getName();
+            paramExprs = tmp.getArgs();
+            beginLine = tmp.getBeginLine();
+            methodNames.addLast(currentMethodName);
+             
+            if (paramExprs != null) {
+                for (Expression paramExpr : paramExprs) {
+                    tmpParam = paramExpr.toString();
+                      params.addLast(resolveParametrBinding(beginLine, tmpParam, vars));
+                }
+            }           
+            if (!removeParam(tmp.toString(), driverMethodCallExprs) ) {
+               methodNames.addLast("null");
+               params.addLast("null");
+            }
+        }
+        preparedCommand.add(methodNames);
+        preparedCommand.add(params);
+        
+    return preparedCommand;      
+    }
+    
+    public Deque<Command> initializeCommands(String testName, List<Variable> vars){
+        List<Deque<MethodCallExpr>> driverMethodCallExprs = prepareDriverMethodCalls(testName, vars);
+        Deque<Command> commands = new ArrayDeque<>();
+        
+        for (Deque<MethodCallExpr> driverMethodCallExpr : driverMethodCallExprs) {
+                List<Deque<String>> preparedCommand = prepareCommand(vars, driverMethodCallExpr);
+                commands.addLast(new Command(preparedCommand.get(0),
+                                        preparedCommand.get(1)));
         }
         
-        return driverMethodCallExprs;
+    return commands;
     }
-
-    
-//    public List<Deque<MethodCallExpr>> filterSeleniumCommands(List<Variable> vars, 
-//            List<Deque<MethodCallExpr>> exprs) {
-//        
-//        List<MethodCallExpr> incompleteCommands = filterIncompleteCommands(vars, exprs);
-//        
-//    return null;
+//    
+//    // METODY KTERÉ BUDOU PATŘIT DO COMMAND EXECUTORU !!!!!!!
+//    public Command recursionMethod(Command command) {
+//        Command tmpCommand;
+//        if(command.getCount() == 0)
+//            return command;
+//        tmpCommand = funkce(Comma);
+//        recursionMethod(command);
+//    return command;    
 //    }
-    
-    
     
 //    private boolean compareDriverNames(String typeName) {
 //        for (String webDriverName : driverNames) {

@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.openqa.selenium.By;
+import org.openqa.selenium.By.ById;
 import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.Cookie;
 import org.openqa.selenium.WebDriver;
@@ -32,7 +33,7 @@ import org.openqa.selenium.remote.RemoteWebElement;
  */
 public class App 
 {
-    private WebDriver driver;
+    private WebDriver driver = new FirefoxDriver();
     private String baseUrl;
     
     public static void main( String[] args ) throws AWTException, IOException, NoSuchMethodException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, ClassNotFoundException, InstantiationException
@@ -67,31 +68,42 @@ public class App
         List<String> list = new ArrayList<>();
         Object str = list;
         
-//        String first = "we.click()";
-//        String second = "driver.FindEl(By.id(dfs))";
-//        String s = second.concat(first.substring(2));
-//       
-//        Class<?> clazz=  Class.forName("java.util.List");
-//        
+        String first = "we.click()";
+        String second = "driver.FindEl(By.id(dfs))";
+        String s = second.concat(first.substring(2));
+       
+//        Class<?> clazz=  Class.forName("org.openqa.selenium");
+        
 //        Method[] methods = clazz.getDeclaredMethods();
 //        for (Method method : methods) {
 //            System.out.println(method.getName());
 //        }
-        sl.findMethodsByAnnotation("@Test");
-        List<String> names = sl.getMethodNames("@Test");
-        List<Variable> variables = sl.resolveTestBindings(names.get(0));
         
-        sl.prepareCommands(names.get(0), variables);
-        sl.initializeDriver(names.get(0), variables);
-           
+//        sl.findMethodsByAnnotation("@Test");
+//        List<String> names = sl.getMethodNames("@Test");
+//        List<Variable> variables = sl.initializeVariables(names.get(0));
+//        
+//        sl.initializeCommands(names.get(0), variables);
+        
+//        Object o = 5.5;
+//        String neco = "prdel";
+//        double m = Math.sqrt(convertInstanceOfObject(o));
+
+        String pozdrav = "ahoj";
+        Command isEqual = p -> p.equals("ahoj");
+        HashMap<String, Command> commands = new HashMap<>();
+        commands.put("equals", isEqual);
+        
+        boolean fd = commands.get("equals").executeCommand(pozdrav);
    }
     
-    public static <T> T convertInstanceOfObject(Object o, Class<T> clazz) {
-            try {
-                return clazz.cast(o);
-    } catch(ClassCastException e) {
-        return null;
+    public static <T> T convertInstanceOfObject(Object o) {
+            return (T)o;
     }
     
+    public static interface Command {
+        boolean executeCommand(String param);
+    }    
 }
-}
+
+
