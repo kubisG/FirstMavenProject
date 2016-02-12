@@ -3,15 +3,14 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.mycompany.firstmavenproject;
+package com.mycompany.firstmavenproject.drivercommand;
+
+import org.openqa.selenium.WebDriver;
 
 /**
  *
  * @author Jakub
  */
-public class TestFactory {
-    private Variable testDriver;
-    private List<Variable> testVars; 
-    private Deque<Command> testCommands;
-    private 
+public interface IDriverCommandStrategy {
+    public Object execute(WebDriver driver);
 }

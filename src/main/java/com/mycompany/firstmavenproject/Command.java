@@ -13,7 +13,7 @@ import java.util.Deque;
  */
 public class Command {
     private final Deque<String> methodNames;
-    private final Deque params;
+    private final Deque<String> params;
 
     public Command(Deque<String> methodNames, Deque<String> params) {
         this.methodNames =  methodNames;
@@ -31,4 +31,18 @@ public class Command {
     public int getCount() {
         return methodNames.size();
     }
+    
+    public String getMethodName(){
+        return methodNames.removeFirst();
+    }
+    
+    public String getParam(){
+        return params.removeFirst();
+    }
+    
+    public void addParam(String param){
+        params.addFirst(param);
+    }
+    
+    
 }

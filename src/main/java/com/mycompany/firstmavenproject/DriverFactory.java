@@ -5,6 +5,7 @@
  */
 package com.mycompany.firstmavenproject;
 
+import java.util.concurrent.TimeUnit;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
@@ -18,18 +19,19 @@ import org.openqa.selenium.safari.SafariDriver;
  */
 public class DriverFactory {
     
-    public WebDriver createDriver(String type) {
+    public static WebDriver create(String type) {
         WebDriver driver = null;
         
-        if(type.equals("FirefoxDriver")){
+        if(type.contains("FirefoxDriver")){
             driver = new FirefoxDriver();
-        } else if(type.equals("ChromeDriver")){
+            driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+        } else if(type.contains("ChromeDriver")){
             driver = new ChromeDriver();
-        } else if(type.equals("InternetExplorerDriver")){
+        } else if(type.contains("InternetExplorerDriver")){
             driver = new InternetExplorerDriver();
-        } else if(type.equals("OperaDriver")){
+        } else if(type.contains("OperaDriver")){
             driver = new OperaDriver();
-        } else if(type.equals("SafariDriver")){
+        } else if(type.contains("SafariDriver")){
             driver = new SafariDriver();
         }
     return driver;

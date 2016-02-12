@@ -5,20 +5,13 @@
  */
 package com.mycompany.firstmavenproject;
 
-import com.thoughtworks.selenium.webdriven.VariableDeclaration;
-import japa.parser.ASTHelper;
 import japa.parser.JavaParser;
 import japa.parser.ParseException;
 import japa.parser.ast.CompilationUnit;
-import japa.parser.ast.Node;
-import japa.parser.ast.body.AnnotationDeclaration;
 import japa.parser.ast.body.BodyDeclaration;
 import japa.parser.ast.body.FieldDeclaration;
 import japa.parser.ast.body.MethodDeclaration;
-import japa.parser.ast.body.TypeDeclaration;
 import japa.parser.ast.body.VariableDeclarator;
-import japa.parser.ast.expr.AnnotationExpr;
-import japa.parser.ast.expr.BinaryExpr;
 import japa.parser.ast.expr.Expression;
 import japa.parser.ast.expr.MethodCallExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
@@ -27,28 +20,16 @@ import japa.parser.ast.visitor.VoidVisitorAdapter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Array;
-import java.time.Clock;
-import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.Stack;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.swing.text.Document;
-import org.eclipse.jetty.util.ArrayQueue;
 
 /**
  *
@@ -60,6 +41,7 @@ public class SeleniumTestParser {
     private final boolean setUpMethod;
     private final String[] driverNames = initializeDriverNames();
     private final String filePath;
+    private List<Variable> vars;
       
     public SeleniumTestParser(String filePath) {
         this.filePath = filePath;
@@ -209,14 +191,12 @@ public class SeleniumTestParser {
     // Metoda 
     public List<Variable> initializeVariables(String testName) {
         MethodDeclaration testMethod = findMethodByName(testName);
-        List<Variable> vars = findMethodVariables(testMethod);
+        vars = findMethodVariables(testMethod);
         // K lokálním proměnným přidám ještě fieldy (instanční proměnné, které 
         // se mohou v metodé vyskytovat) 
         vars.addAll(fields);
         resolveBindings(vars, testMethod);
-        
-        //  CHYBÍ DODĚLAT VYHODNOCĚNÍ VÝRAZŮ "HODNOT" POKUD JE TŘEBA
-        //
+       
     return vars;
     }
     
@@ -351,7 +331,7 @@ public class SeleniumTestParser {
         }
     }
      
-    public Variable initializeDriver(String testName ,List<Variable> vars) {
+    private Variable initializeDriver(String testName) {
         Variable driver;
         MethodDeclaration testMethod = findMethodByName(testName);
         List<String> statements = methodToStrings(testMethod);
@@ -362,10 +342,26 @@ public class SeleniumTestParser {
                         .anyMatch(n -> e.getVarType().equals(n)))
                 .filter(d -> statements
                         .stream()
-                        .anyMatch(s -> s.contains(d.getVarName() + "."))) // Př: driver.
+                        .anyMatch(s -> s.contains(d.getVarName() + ".")))
                 .reduce(null, (a, v) -> new Variable(v));
     
     return driver;
+    }
+    
+    public String getDriverType(String testName){
+        Variable driver = initializeDriver(testName);
+        String driverType;
+        
+        return driverType = driver.getValues()
+                .stream()
+                .map(val -> val.getValue())
+                .reduce(null, (a,v) -> v);
+    }
+    
+    private String getDriverName(String testName){
+        Variable driver = initializeDriver(testName);
+        
+        return driver.getVarName();
     }
     
     // Potom upravím aby parametrem byla nejaka podmínka a ne jen string  
@@ -482,7 +478,7 @@ public class SeleniumTestParser {
         List<Deque<MethodCallExpr>> tmpMethodCallExprs;
         List<Variable> seleniumVars;
         MethodDeclaration method;
-        String driverName = "driver"; // NEMIT TO NA PEVNO NASTAVENE !!!!
+        String driverName = getDriverName(testName);
 
         method = findMethodByName(testName);
         seleniumVars = filterVariables(vars, driverName);
@@ -536,6 +532,13 @@ public class SeleniumTestParser {
     return false;
     }
     
+    public String trimParamQuotes(String param){
+        int firstChar = 1;
+        int lastChar = param.length()-1;
+        
+        return param.substring(firstChar, lastChar);
+    }
+    
     // UPRAVIT ABYCH NEMEL V PARAMS VOLÁNÍ VNITRNICH METOD !!! ZÍTRA
     public List<Deque<String>> prepareCommand(List<Variable> vars,
             Deque<MethodCallExpr> driverMethodCallExprs){
@@ -558,14 +561,15 @@ public class SeleniumTestParser {
              
             if (paramExprs != null) {
                 for (Expression paramExpr : paramExprs) {
-                    tmpParam = paramExpr.toString();
+                    tmpParam = trimParamQuotes(paramExpr.toString());
                       params.addLast(resolveParametrBinding(beginLine, tmpParam, vars));
                 }
-            }           
-            if (!removeParam(tmp.toString(), driverMethodCallExprs) ) {
-               methodNames.addLast("null");
-               params.addLast("null");
-            }
+            }                  
+            removeParam(tmp.toString(), driverMethodCallExprs);
+//            if (!removeParam(tmp.toString(), driverMethodCallExprs) ) {
+//               methodNames.addLast("null");
+//               params.addLast("null");
+//            }
         }
         preparedCommand.add(methodNames);
         preparedCommand.add(params);
@@ -573,7 +577,8 @@ public class SeleniumTestParser {
     return preparedCommand;      
     }
     
-    public Deque<Command> initializeCommands(String testName, List<Variable> vars){
+    public Deque<Command> parse(String testName){
+        vars = initializeVariables(testName);
         List<Deque<MethodCallExpr>> driverMethodCallExprs = prepareDriverMethodCalls(testName, vars);
         Deque<Command> commands = new ArrayDeque<>();
         

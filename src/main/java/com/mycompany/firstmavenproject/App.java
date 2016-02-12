@@ -1,31 +1,10 @@
 package com.mycompany.firstmavenproject;
 
-import com.gargoylesoftware.htmlunit.javascript.host.URL;
-import com.google.common.collect.HashBiMap;
-import com.thoughtworks.selenium.webdriven.WebDriverCommandProcessor;
 import java.awt.AWTException;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Deque;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import org.openqa.selenium.By;
-import org.openqa.selenium.By.ById;
-import org.openqa.selenium.Capabilities;
-import org.openqa.selenium.Cookie;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.firefox.FirefoxDriver;
-import org.openqa.selenium.remote.Command;
-import org.openqa.selenium.remote.CommandExecutor;
-import org.openqa.selenium.remote.DesiredCapabilities;
-import org.openqa.selenium.remote.HttpCommandExecutor;
-import org.openqa.selenium.remote.RemoteWebDriver;
-import org.openqa.selenium.remote.RemoteWebElement;
 
 /**
  * Hello world!
@@ -33,77 +12,26 @@ import org.openqa.selenium.remote.RemoteWebElement;
  */
 public class App 
 {
-    private WebDriver driver = new FirefoxDriver();
-    private String baseUrl;
-    
-    public static void main( String[] args ) throws AWTException, IOException, NoSuchMethodException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, ClassNotFoundException, InstantiationException
+    public static void main( String[] args ) throws AWTException, IOException, NoSuchMethodException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, ClassNotFoundException, InstantiationException, InterruptedException
     {
-        System.out.println( "Hello World!" );
-        String commandName = "isDisplayed";
-        String commandNamem = "sendKeys";
-        RemoteWebElement rElement = new RemoteWebElement();
-        //java.lang.reflect.Method method = null;
-        SeleniumTestParser sl = new SeleniumTestParser("C:\\Users\\Jakub\\Documents\\NetBeansProjects\\tets.txt");
-        //WebDriverCommandProcessor w = new WebDriverCommandProcessor("http://www.google.com", new FirefoxDriver());
-//        CharSequence[] sek = new String[2];
-//        sek[0] = "ahoj";
-//        sek[1] = " kokote";
-//        Class[] cArgs = new Class[1];
-//        cArgs[0] = CharSequence[].class;
-//        Object[] argss = null;
-//        Object[] argsForSecondM = {sek};
-//        
-//        FirefoxDriver driver = new FirefoxDriver();
-//        driver.manage().timeouts().implicitlyWait(30, TimeUnit.SECONDS);
-//        driver.get("https://www.google.cz/");
-//        WebElement element = driver.findElement(By.id("lst-ib"));
-//        if(element instanceof RemoteWebElement)
-//            method = element.getClass().getDeclaredMethod(commandName, (Class<?>[]) argss);
-//        Object result = method.invoke(element);
-//        if(element instanceof RemoteWebElement)
-//            method = element.getClass().getDeclaredMethod(commandNamem, (Class<?>[]) cArgs);
-//        Object results = method.invoke(element, (Object) sek);
-//        driver.quit();
-        
-        List<String> list = new ArrayList<>();
-        Object str = list;
-        
-        String first = "we.click()";
-        String second = "driver.FindEl(By.id(dfs))";
-        String s = second.concat(first.substring(2));
-       
-//        Class<?> clazz=  Class.forName("org.openqa.selenium");
-        
-//        Method[] methods = clazz.getDeclaredMethods();
-//        for (Method method : methods) {
-//            System.out.println(method.getName());
-//        }
-        
-//        sl.findMethodsByAnnotation("@Test");
-//        List<String> names = sl.getMethodNames("@Test");
-//        List<Variable> variables = sl.initializeVariables(names.get(0));
-//        
-//        sl.initializeCommands(names.get(0), variables);
-        
-//        Object o = 5.5;
-//        String neco = "prdel";
-//        double m = Math.sqrt(convertInstanceOfObject(o));
-
-        String pozdrav = "ahoj";
-        Command isEqual = p -> p.equals("ahoj");
-        HashMap<String, Command> commands = new HashMap<>();
-        commands.put("equals", isEqual);
-        
-        boolean fd = commands.get("equals").executeCommand(pozdrav);
+        SeleniumTestParser parser = new SeleniumTestParser(
+                "C:\\Users\\Jakub\\Documents\\NetBeansProjects\\zezula1.java");
+        List<String> testMethodNames = parser.getMethodNames("@Test");
+        String testName = testMethodNames.get(0);
+        Deque<Command> inputCommands = parser.parse(testName);
+        String testType = parser.getDriverType(testName);
+        inputCommands.removeFirst();
+        Test myTest = TestBuilder.create(testType, inputCommands);
+        myTest.runTest();             
    }
     
     public static <T> T convertInstanceOfObject(Object o) {
             return (T)o;
     }
     
-    public static interface Command {
-        boolean executeCommand(String param);
-    }    
+//    public static interface Command {
+//        boolean executeCommand(String param);
+//    }    
 }
 
 
